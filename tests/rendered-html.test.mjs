@@ -13,6 +13,7 @@ test("partner catalog includes the selection and PDF workflow", async () => {
   assert.match(source, /FiraSansExtraCondensed-ExtraBold\.ttf/);
   assert.match(source, /priceSize=34/);
   assert.match(source, /const clover=/);
+  assert.match(source, /x\+TW-38/);
 });
 
 test("admin supports suppliers, Excel import and price-tag attributes", async () => {
