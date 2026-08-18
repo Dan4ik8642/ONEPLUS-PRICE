@@ -16,6 +16,8 @@ test("partner catalog includes the selection and PDF workflow", async () => {
   assert.match(source, /x\+TW-38/);
   assert.match(source, /let size=18/);
   assert.match(source, /lineHeight=size\*\.96/);
+  assert.match(source, /nameWidth=hasBadge\?108:148/);
+  assert.match(source, /widthOfTextAtSize\(line,size\)>nameWidth/);
 });
 
 test("admin supports suppliers, Excel import and price-tag attributes", async () => {
