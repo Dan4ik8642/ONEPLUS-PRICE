@@ -1,12 +1,145 @@
 /* eslint-disable @next/next/no-html-link-for-pages */
-"use client";import{useEffect,useMemo,useState}from"react";import*as XLSX from"xlsx";
-type Supplier={id:number;name:string;active:number};type Product={id:number;supplierId:number;article:string;name:string;weight:number|null;price:number;vegan:number;hit:number;active:number};
-export default function AdminClient(){const[suppliers,setSuppliers]=useState<Supplier[]>([]);const[products,setProducts]=useState<Product[]>([]);const[sid,setSid]=useState<number|null>(null);const[newSupplier,setNewSupplier]=useState("");const[notice,setNotice]=useState("");const[manual,setManual]=useState({article:"",name:"",weight:"",price:""});
-async function load(){const r=await fetch("/api/admin");if(r.status===403){location.href="/login";return;}const d=await r.json();setSuppliers(d.suppliers);setProducts(d.products);setSid(s=>s??d.suppliers[0]?.id??null);}useEffect(()=>{// eslint-disable-next-line react-hooks/set-state-in-effect
-void load()},[]);const list=useMemo(()=>products.filter(p=>p.supplierId===sid),[products,sid]);
-async function post(body:unknown){const r=await fetch("/api/admin",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error);return d;}
-async function addSupplier(){if(!newSupplier.trim())return;await post({action:"supplier",name:newSupplier});setNewSupplier("");await load();}
-async function save(p:Product){await post({action:"product",product:{...p,vegan:!!p.vegan,hit:!!p.hit,active:!!p.active}});setNotice("Изменения сохранены");await load();}
-async function addManual(){if(!sid||!manual.name||!manual.price)return;await post({action:"manual",product:{supplierId:sid,...manual,weight:manual.weight?Number(manual.weight):null,price:Number(manual.price)}});setManual({article:"",name:"",weight:"",price:""});await load();}
-async function upload(file:File){if(!sid)return;const data=await file.arrayBuffer();const wb=XLSX.read(data);const rows=XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]],{header:1,defval:null});const h=rows.findIndex(r=>Array.isArray(r)&&r.some(v=>String(v||"").trim().toLowerCase()==="название"));if(h<0){setNotice("Не найдена колонка «Название»");return;}const headers=(rows[h]as unknown[]).map(v=>String(v||"").trim().toLowerCase());const col=(...names:string[])=>headers.findIndex(x=>names.includes(x));const ni=col("название"),ai=col("артикул"),pi=col("цена, р.","цена","цена, ₽"),wi=col("граммовка","граммовка, г","вес");const parsed=(rows.slice(h+1)as unknown[][]).filter(r=>r[ni]&&r[pi]!=null).map(r=>{let name=String(r[ni]).replace(/\s+/g," ").trim();let weight=wi>=0&&r[wi]!=null?Number(String(r[wi]).match(/\d+/)?.[0]):null;const m=name.match(/\s+(\d+)\s*(?:г|гр)\s*_[\p{L}\p{N}-]{2,16}$/iu);if(m){weight=weight||Number(m[1]);name=name.slice(0,m.index).trim();}return{article:ai>=0?String(r[ai]||""):"",name:name.toUpperCase(),weight,price:Number(r[pi])};});const result=await post({action:"import",supplierId:sid,rows:parsed});setNotice(`Загружено позиций: ${result.imported}`);await load();}
-return <main className="admin-shell"><header className="admin-header"><a href="/" className="admin-logo">ONE <span>PRICE</span></a><div><h1>Управление каталогом</h1><p>Поставщики, позиции, цены и фишки</p></div><a href="/">Панель партнёра →</a></header><section className="admin-grid"><aside className="admin-suppliers"><h2>Поставщики</h2>{suppliers.map(s=><button key={s.id} className={sid===s.id?"active":""} onClick={()=>setSid(s.id)}>{s.name}<span>{products.filter(p=>p.supplierId===s.id).length}</span></button>)}<div className="add-supplier"><input placeholder="Новый поставщик" value={newSupplier} onChange={e=>setNewSupplier(e.target.value)}/><button onClick={addSupplier}>Добавить</button></div></aside><section className="admin-content"><div className="admin-actions"><div><h2>{suppliers.find(s=>s.id===sid)?.name||"Выберите поставщика"}</h2><p>{list.length} позиций</p></div><label className="upload-button">Загрузить Excel<input type="file" accept=".xlsx,.xls" onChange={e=>e.target.files?.[0]&&upload(e.target.files[0])}/></label></div>{notice&&<p className="notice">{notice}</p>}<div className="manual-form"><input placeholder="Артикул" value={manual.article} onChange={e=>setManual({...manual,article:e.target.value})}/><input className="wide" placeholder="Название позиции" value={manual.name} onChange={e=>setManual({...manual,name:e.target.value})}/><input placeholder="Граммы" value={manual.weight} onChange={e=>setManual({...manual,weight:e.target.value})}/><input placeholder="Цена" value={manual.price} onChange={e=>setManual({...manual,price:e.target.value})}/><button onClick={addManual}>Добавить вручную</button></div><div className="admin-table"><div className="admin-row head"><span>Название</span><span>Г</span><span>Цена</span><span>Веган</span><span>Хит</span><span>Активна</span><span/></div>{list.map(p=><div className="admin-row" key={p.id}><input value={p.name} onChange={e=>setProducts(cur=>cur.map(x=>x.id===p.id?{...x,name:e.target.value}:x))}/><input value={p.weight??""} onChange={e=>setProducts(cur=>cur.map(x=>x.id===p.id?{...x,weight:e.target.value?Number(e.target.value):null}:x))}/><input value={p.price} onChange={e=>setProducts(cur=>cur.map(x=>x.id===p.id?{...x,price:Number(e.target.value)}:x))}/><input type="checkbox" checked={!!p.vegan} onChange={e=>setProducts(cur=>cur.map(x=>x.id===p.id?{...x,vegan:e.target.checked?1:0}:x))}/><input type="checkbox" checked={!!p.hit} onChange={e=>setProducts(cur=>cur.map(x=>x.id===p.id?{...x,hit:e.target.checked?1:0}:x))}/><input type="checkbox" checked={!!p.active} onChange={e=>setProducts(cur=>cur.map(x=>x.id===p.id?{...x,active:e.target.checked?1:0}:x))}/><button onClick={()=>save(p)}>Сохранить</button></div>)}</div></section></section></main>}
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
+
+type City = { id: number; name: string; active: number };
+type Supplier = { id: number; name: string; active: number; cityId: number };
+type Product = { id: number; supplierId: number; article: string; name: string; weight: number | null; price: number; vegan: number; hit: number; active: number };
+
+export default function AdminClient() {
+  const [cities, setCities] = useState<City[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [cityId, setCityId] = useState<number | null>(null);
+  const [supplierId, setSupplierId] = useState<number | null>(null);
+  const [newCity, setNewCity] = useState("");
+  const [newSupplier, setNewSupplier] = useState("");
+  const [notice, setNotice] = useState("");
+  const [manual, setManual] = useState({ article: "", name: "", weight: "", price: "" });
+
+  async function load() {
+    const response = await fetch("/api/admin");
+    if (response.status === 403) { location.href = "/login"; return; }
+    const data = await response.json();
+    setCities(data.cities);
+    setSuppliers(data.suppliers);
+    setProducts(data.products);
+    setCityId((current) => current ?? data.cities[0]?.id ?? null);
+  }
+
+  useEffect(() => { // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, []);
+
+  const citySuppliers = useMemo(() => suppliers.filter((supplier) => supplier.cityId === cityId), [suppliers, cityId]);
+  const list = useMemo(() => products.filter((product) => product.supplierId === supplierId), [products, supplierId]);
+  const selectedSupplier = suppliers.find((supplier) => supplier.id === supplierId && supplier.cityId === cityId);
+
+  async function post(body: unknown) {
+    const response = await fetch("/api/admin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    return data;
+  }
+
+  function chooseCity(id: number) {
+    setCityId(id);
+    setSupplierId(null);
+    setNotice("");
+  }
+
+  async function addCity() {
+    if (!newCity.trim()) return;
+    const result = await post({ action: "city", name: newCity });
+    setNewCity("");
+    setCityId(result.city.id);
+    setSupplierId(null);
+    await load();
+  }
+
+  async function removeCity() {
+    if (!cityId || !confirm("Удалить этот город? Поставщиков в городе быть не должно.")) return;
+    try {
+      await post({ action: "delete_city", id: cityId });
+      setCityId(null);
+      setSupplierId(null);
+      await load();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Не удалось удалить город"); }
+  }
+
+  async function addSupplier() {
+    if (!newSupplier.trim() || !cityId) return;
+    const result = await post({ action: "supplier", name: newSupplier, cityId });
+    setNewSupplier("");
+    setSupplierId(result.supplier.id);
+    await load();
+  }
+
+  async function removeSupplier() {
+    if (!supplierId || !confirm("Удалить поставщика и все его позиции? Это действие нельзя отменить.")) return;
+    await post({ action: "delete_supplier", id: supplierId });
+    setSupplierId(null);
+    setNotice("Поставщик удалён");
+    await load();
+  }
+
+  async function save(product: Product) {
+    await post({ action: "product", product: { ...product, vegan: !!product.vegan, hit: !!product.hit, active: !!product.active } });
+    setNotice("Изменения сохранены");
+    await load();
+  }
+
+  async function removeProduct(product: Product) {
+    if (!confirm(`Удалить позицию «${product.name}»?`)) return;
+    await post({ action: "delete_product", id: product.id });
+    setNotice("Позиция удалена");
+    await load();
+  }
+
+  async function addManual() {
+    if (!supplierId || !manual.name || !manual.price) return;
+    await post({ action: "manual", product: { supplierId, ...manual, weight: manual.weight ? Number(manual.weight) : null, price: Number(manual.price) } });
+    setManual({ article: "", name: "", weight: "", price: "" });
+    await load();
+  }
+
+  async function upload(file: File) {
+    if (!supplierId) return;
+    const workbook = XLSX.read(await file.arrayBuffer());
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: null });
+    const headerIndex = rows.findIndex((row) => Array.isArray(row) && row.some((value) => String(value || "").trim().toLowerCase() === "название"));
+    if (headerIndex < 0) { setNotice("Не найдена колонка «Название»"); return; }
+    const headers = (rows[headerIndex] as unknown[]).map((value) => String(value || "").trim().toLowerCase());
+    const column = (...names: string[]) => headers.findIndex((header) => names.includes(header));
+    const nameIndex = column("название"), articleIndex = column("артикул"), priceIndex = column("цена, р.", "цена", "цена, ₽"), weightIndex = column("граммовка", "граммовка, г", "вес");
+    const parsed = (rows.slice(headerIndex + 1) as unknown[][]).filter((row) => row[nameIndex] && row[priceIndex] != null).map((row) => {
+      let name = String(row[nameIndex]).replace(/\s+/g, " ").trim();
+      let weight = weightIndex >= 0 && row[weightIndex] != null ? Number(String(row[weightIndex]).match(/\d+/)?.[0]) : null;
+      const suffix = name.match(/\s+(\d+)\s*(?:г|гр)\s*_[\p{L}\p{N}-]{2,16}$/iu);
+      if (suffix) { weight = weight || Number(suffix[1]); name = name.slice(0, suffix.index).trim(); }
+      return { article: articleIndex >= 0 ? String(row[articleIndex] || "") : "", name: name.toUpperCase(), weight, price: Number(row[priceIndex]) };
+    });
+    const result = await post({ action: "import", supplierId, rows: parsed });
+    setNotice(`Загружено позиций: ${result.imported}`);
+    await load();
+  }
+
+  return <main className="admin-shell">
+    <header className="admin-header"><a href="/" className="admin-logo">ONE <span>PRICE</span></a><div><h1>Управление каталогом</h1><p>Города, поставщики, позиции, цены и фишки</p></div><a href="/">Панель партнёра →</a></header>
+    <div className="city-admin-bar">
+      <div className="city-tabs">{cities.map((city) => <button key={city.id} className={cityId === city.id ? "active" : ""} onClick={() => chooseCity(city.id)}>{city.name}</button>)}</div>
+      <div className="city-create"><input placeholder="Новый город" value={newCity} onChange={(event) => setNewCity(event.target.value)} /><button onClick={addCity}>Добавить город</button>{cityId && <button className="danger-link" onClick={removeCity}>Удалить город</button>}</div>
+    </div>
+    <section className="admin-grid">
+      <aside className="admin-suppliers"><h2>Поставщики</h2>{citySuppliers.map((supplier) => <button key={supplier.id} className={supplierId === supplier.id ? "active" : ""} onClick={() => setSupplierId(supplier.id)}>{supplier.name}<span>{products.filter((product) => product.supplierId === supplier.id).length}</span></button>)}{cityId && <div className="add-supplier"><input placeholder="Новый поставщик" value={newSupplier} onChange={(event) => setNewSupplier(event.target.value)} /><button onClick={addSupplier}>Добавить</button></div>}</aside>
+      <section className="admin-content">
+        <div className="admin-actions"><div><h2>{selectedSupplier?.name || "Выберите поставщика"}</h2><p>{list.length} позиций</p></div><div className="admin-action-buttons">{selectedSupplier && <button className="danger-button" onClick={removeSupplier}>Удалить поставщика</button>}<label className={`upload-button ${!selectedSupplier ? "disabled" : ""}`}>Загрузить Excel<input disabled={!selectedSupplier} type="file" accept=".xlsx,.xls" onChange={(event) => event.target.files?.[0] && upload(event.target.files[0])} /></label></div></div>
+        {notice && <p className="notice">{notice}</p>}
+        {selectedSupplier && <><div className="manual-form"><input placeholder="Артикул" value={manual.article} onChange={(event) => setManual({ ...manual, article: event.target.value })} /><input className="wide" placeholder="Название позиции" value={manual.name} onChange={(event) => setManual({ ...manual, name: event.target.value })} /><input placeholder="Граммы" value={manual.weight} onChange={(event) => setManual({ ...manual, weight: event.target.value })} /><input placeholder="Цена" value={manual.price} onChange={(event) => setManual({ ...manual, price: event.target.value })} /><button onClick={addManual}>Добавить вручную</button></div>
+        <div className="admin-table"><div className="admin-row head"><span>Название</span><span>Г</span><span>Цена</span><span>Веган</span><span>Хит</span><span>Активна</span><span>Действия</span></div>{list.map((product) => <div className="admin-row" key={product.id}><input value={product.name} onChange={(event) => setProducts((current) => current.map((item) => item.id === product.id ? { ...item, name: event.target.value } : item))} /><input value={product.weight ?? ""} onChange={(event) => setProducts((current) => current.map((item) => item.id === product.id ? { ...item, weight: event.target.value ? Number(event.target.value) : null } : item))} /><input value={product.price} onChange={(event) => setProducts((current) => current.map((item) => item.id === product.id ? { ...item, price: Number(event.target.value) } : item))} /><input type="checkbox" checked={!!product.vegan} onChange={(event) => setProducts((current) => current.map((item) => item.id === product.id ? { ...item, vegan: event.target.checked ? 1 : 0 } : item))} /><input type="checkbox" checked={!!product.hit} onChange={(event) => setProducts((current) => current.map((item) => item.id === product.id ? { ...item, hit: event.target.checked ? 1 : 0 } : item))} /><input type="checkbox" checked={!!product.active} onChange={(event) => setProducts((current) => current.map((item) => item.id === product.id ? { ...item, active: event.target.checked ? 1 : 0 } : item))} /><div className="row-actions"><button onClick={() => save(product)}>Сохранить</button><button className="delete-icon" aria-label={`Удалить ${product.name}`} onClick={() => removeProduct(product)}>×</button></div></div>)}</div></>}
+      </section>
+    </section>
+  </main>;
+}
