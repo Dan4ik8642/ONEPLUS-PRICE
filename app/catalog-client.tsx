@@ -1,7 +1,7 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { PDFDocument, rgb } from "pdf-lib";
+import { degrees, PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 
 type City={id:number;name:string};
@@ -21,10 +21,11 @@ export default function CatalogClient({role}:{role:"partner"|"admin"}){
   const cream=rgb(254/255,248/255,214/255),green=rgb(36/255,121/255,36/255),orange=rgb(1,126/255,46/255),white=rgb(1,1,1);
   function lines(text:string,max:number,size:number){const words=text.toUpperCase().split(/\s+/);const out:string[]=[];let line="";for(const word of words){const next=line?`${line} ${word}`:word;if(font.widthOfTextAtSize(next,size)<=max)line=next;else{if(line)out.push(line);line=word;}}if(line)out.push(line);return out;}
   for(let i=0;i<chosen.length;i++){if(i%18===0)pdf.addPage([W,H]);const page=pdf.getPages().at(-1)!;const local=i%18,col=local%3,row=Math.floor(local/3),x=ox+col*TW,y=oy+(5-row)*TH,p=chosen[i];page.drawRectangle({x,y,width:TW,height:TH,color:cream,borderColor:rgb(.72,.72,.72),borderWidth:.3});
-   const hasBadge=p.vegan||p.hit;let size=13;let wrapped=lines(p.name,hasBadge?112:146,size);while(wrapped.length>3&&size>9){size-=.5;wrapped=lines(p.name,hasBadge?112:146,size);}wrapped.slice(0,3).forEach((line,j)=>page.drawText(line,{x:x+11,y:y+TH-22-j*size*1.12,size,font,color:green}));
-   const price=`${p.price} ₽`,ps=21;page.drawText(price,{x:x+11,y:y+14,size:ps,font,color:green});const pw=font.widthOfTextAtSize(price,ps);if(p.weight)page.drawText(`/ ${p.weight} Г`,{x:x+15+pw,y:y+16,size:11,font,color:green});
-   const badge=(label:string,cy:number,color:typeof green,textColor:typeof green)=>{page.drawCircle({x:x+TW-22,y:cy,size:14,color,borderColor:color,borderWidth:.8});page.drawText(label,{x:x+TW-22-font.widthOfTextAtSize(label,5)/2,y:cy-2,size:5,font,color:textColor});};
-   if(p.vegan)badge("ВЕГАН",y+TH-23,cream,green);if(p.hit)badge("ХИТ",y+TH-(p.vegan?63:23),orange,white);
+   const hasBadge=p.vegan||p.hit;let size=19;let wrapped=lines(p.name,hasBadge?119:148,size);while(wrapped.length>3&&size>10){size-=.5;wrapped=lines(p.name,hasBadge?119:148,size);}const lineHeight=size*1.04;wrapped.slice(0,3).forEach((line,j)=>page.drawText(line,{x:x+12,y:y+TH-27-j*lineHeight,size,font,color:green}));
+   const price=`${p.price} ₽`,priceSize=34;page.drawText(price,{x:x+11,y:y+10,size:priceSize,font,color:green});const priceWidth=font.widthOfTextAtSize(price,priceSize);if(p.weight){page.drawText("/",{x:x+15+priceWidth,y:y+8,size:30,font,color:green,rotate:degrees(-10)});page.drawText(`${p.weight} Г`,{x:x+31+priceWidth,y:y+11,size:17,font,color:green});}
+   const clover="M 10 2 C 10 -4 15 -8 21 -8 C 27 -8 32 -4 32 2 C 38 2 42 7 42 13 C 42 19 38 24 32 24 C 32 30 27 34 21 34 C 15 34 10 30 10 24 C 4 24 0 19 0 13 C 0 7 4 2 10 2 Z";
+   const badge=(label:string,top:number,fill:typeof green,textColor:typeof green,outlined=false)=>{const bx=x+TW-42,by=top;page.drawSvgPath(clover,{x:bx,y:by,scale:.72,color:fill,borderColor:outlined?green:fill,borderWidth:outlined?1.15:0});const labelSize=label==="ВЕГАН"?6.6:7.2;page.drawText(label,{x:bx+15.1-font.widthOfTextAtSize(label,labelSize)/2,y:by-12.3,size:labelSize,font,color:textColor});};
+   if(p.vegan)badge("ВЕГАН",y+TH-19,cream,green,true);if(p.hit)badge("ХИТ",y+TH-(p.vegan?55:19),orange,white);
   }
   const bytes=await pdf.save();const blob=new Blob([new Uint8Array(bytes)],{type:"application/pdf"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`Ценники_${cities.find(c=>c.id===cityId)?.name||"Город"}_${suppliers.find(s=>s.id===supplierId)?.name||"OnePrice"}.pdf`;a.click();URL.revokeObjectURL(a.href);
  }

@@ -11,6 +11,8 @@ test("partner catalog includes the selection and PDF workflow", async () => {
   assert.match(source, /Сформировать PDF/);
   assert.match(source, /Сначала выберите город/);
   assert.match(source, /FiraSansExtraCondensed-ExtraBold\.ttf/);
+  assert.match(source, /priceSize=34/);
+  assert.match(source, /const clover=/);
 });
 
 test("admin supports suppliers, Excel import and price-tag attributes", async () => {
