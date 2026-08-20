@@ -21,6 +21,7 @@ export default function AdminClient() {
   const [newSupplier, setNewSupplier] = useState("");
   const [newList, setNewList] = useState({ name: "", validFrom: "" });
   const [notice, setNotice] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [manual, setManual] = useState({ article: "", name: "", weight: "", price: "" });
 
   async function load() {
@@ -142,6 +143,38 @@ export default function AdminClient() {
     setNotice(`Загружено позиций: ${result.imported}`);
     await load();
   }
+  async function uploadReadySuppliers(file: File) {
+    if (!cityId) return;
+    setBulkLoading(true);
+    setNotice("Читаем базу и распределяем позиции по поставщикам…");
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer());
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: null });
+      const headerIndex = rows.findIndex((row) => Array.isArray(row) && row.some((value) => String(value || "").trim().toLowerCase() === "поставщик"));
+      if (headerIndex < 0) throw new Error("Не найдена колонка «Поставщик»");
+      const headers = (rows[headerIndex] as unknown[]).map((value) => String(value || "").trim().toLowerCase());
+      const column = (...names: string[]) => headers.findIndex((header) => names.includes(header));
+      const nameIndex = column("название", "наименование"), articleIndex = column("артикул"), supplierIndex = column("поставщик"), priceIndex = column("цена, р.", "цена", "цена, ₽"), weightIndex = column("граммовка", "граммовка, г", "вес");
+      if (nameIndex < 0 || supplierIndex < 0 || priceIndex < 0) throw new Error("Нужны колонки «Название», «Поставщик» и «Цена, р.»");
+      const parsed = (rows.slice(headerIndex + 1) as unknown[][]).filter((row) => row[nameIndex] && row[supplierIndex] && row[priceIndex] != null).map((row) => {
+        let name = String(row[nameIndex]).replace(/\s+/g, " ").trim();
+        let weight = weightIndex >= 0 && row[weightIndex] != null ? Number(String(row[weightIndex]).match(/\d+/)?.[0]) : null;
+        const suffix = name.match(/\s+(\d+)\s*(?:г|гр)\s*_[\p{L}\p{N}-]{2,16}$/iu);
+        if (suffix) { weight = weight || Number(suffix[1]); name = name.slice(0, suffix.index).trim(); }
+        const rawPrice = row[priceIndex];
+        const price = typeof rawPrice === "number" ? rawPrice : Number(String(rawPrice).replace(/\s/g, "").replace(",", "."));
+        return { article: articleIndex >= 0 ? String(row[articleIndex] || "") : "", name: name.toUpperCase(), supplier: String(row[supplierIndex]).trim(), weight, price };
+      }).filter((row) => Number.isFinite(row.price));
+      const result = await post({ action: "bulk_import", cityId, rows: parsed });
+      setSupplierId(null); setPriceListId(null);
+      setNotice(`Готово: ${result.suppliers} поставщиков, ${result.imported} строк загружено в город`);
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Не удалось загрузить готовую базу");
+    } finally {
+      setBulkLoading(false);
+    }
+  }
 
   return <main className="admin-shell">
     <header className="admin-header"><a href="/" className="admin-logo">ONE <span>PRICE</span></a><div><h1>Управление каталогом</h1><p>Города, поставщики, версии цен, позиции и фишки</p></div><a href="/">Панель партнёра →</a></header>
@@ -152,6 +185,7 @@ export default function AdminClient() {
     <section className="admin-grid">
       <aside className="admin-suppliers"><h2>Поставщики</h2>{citySuppliers.map((supplier) => <button key={supplier.id} className={supplierId === supplier.id ? "active" : ""} onClick={() => chooseSupplier(supplier.id)}>{supplier.name}<span>{priceLists.filter((item) => item.supplierId === supplier.id).length} вер.</span></button>)}{cityId && <div className="add-supplier"><input placeholder="Новый поставщик" value={newSupplier} onChange={(event) => setNewSupplier(event.target.value)} /><button onClick={addSupplier}>Добавить</button></div>}</aside>
       <section className="admin-content">
+        {cityId && <div className="bulk-import-card"><div><b>Загрузить готовых поставщиков в город</b><span>Excel должен содержать: Артикул, Название, Поставщик и Цена. Поставщики создадутся автоматически.</span></div><label className={`upload-button ${bulkLoading ? "disabled" : ""}`}>{bulkLoading ? "Загрузка…" : "Выбрать общую базу"}<input disabled={bulkLoading} type="file" accept=".xlsx,.xls" onChange={(event) => event.target.files?.[0] && uploadReadySuppliers(event.target.files[0])} /></label></div>}
         <div className="admin-actions"><div><h2>{selectedSupplier?.name || "Выберите поставщика"}</h2><p>{supplierLists.length} версий цен</p></div>{selectedSupplier && <button className="danger-button" onClick={removeSupplier}>Удалить поставщика</button>}</div>
         {notice && <p className="notice">{notice}</p>}
         {selectedSupplier && <div className="version-admin">

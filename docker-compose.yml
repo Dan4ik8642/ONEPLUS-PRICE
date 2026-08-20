@@ -1,0 +1,37 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: one-price-labels
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - one_price_data:/app/.wrangler
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["seed"]
+    env_file:
+      - .env
+    environment:
+      BASE_URL: http://app:3000
+      SEED_CITY: Москва
+    command: ["node", "scripts/seed-production.mjs"]
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  one_price_data:

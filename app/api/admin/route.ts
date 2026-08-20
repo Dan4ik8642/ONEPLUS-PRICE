@@ -82,6 +82,42 @@ export async function POST(request: Request) {
     for (let index = 0; index < statements.length; index += 80) await db.batch(statements.slice(index, index + 80));
     return Response.json({ ok: true, imported: statements.length });
   }
+  if (body.action === "bulk_import") {
+    const cityId = Number(body.cityId);
+    const rows = body.rows as Array<Record<string, unknown>>;
+    if (!cityId) return Response.json({ error: "Выберите город для поставщиков" }, { status: 400 });
+    if (!Array.isArray(rows) || rows.length === 0) return Response.json({ error: "В таблице нет позиций" }, { status: 400 });
+    if (rows.length > 15000) return Response.json({ error: "За один раз можно загрузить не более 15 000 строк" }, { status: 400 });
+
+    const grouped = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of rows) {
+      const supplier = String(row.supplier || "").trim();
+      if (!supplier || !row.name || row.price == null) continue;
+      const group = grouped.get(supplier) || [];
+      group.push(row);
+      grouped.set(supplier, group);
+    }
+    if (grouped.size === 0) return Response.json({ error: "Не найдены колонки «Поставщик», «Название» и «Цена»" }, { status: 400 });
+
+    let imported = 0;
+    for (const [supplierName, supplierRows] of grouped) {
+      const supplier = await db.prepare("INSERT INTO suppliers(name) VALUES(?) ON CONFLICT(name) DO UPDATE SET active=1 RETURNING id").bind(supplierName).first<{ id: number }>();
+      const supplierId = Number(supplier!.id);
+      await db.prepare("INSERT OR IGNORE INTO supplier_cities(supplier_id,city_id) VALUES(?,?)").bind(supplierId, cityId).run();
+      await db.prepare("INSERT OR IGNORE INTO price_lists(supplier_id,name) VALUES(?,'Текущие цены')").bind(supplierId).run();
+      const priceList = await db.prepare("SELECT id FROM price_lists WHERE supplier_id=? AND name='Текущие цены'").bind(supplierId).first<{ id: number }>();
+      const statements = supplierRows.map((row) => db.prepare("INSERT INTO price_list_items(price_list_id,article,name,weight,price) VALUES(?,?,?,?,?) ON CONFLICT(price_list_id,article) DO UPDATE SET name=excluded.name,weight=excluded.weight,price=excluded.price,active=1,updated_at=CURRENT_TIMESTAMP").bind(
+        Number(priceList!.id),
+        String(row.article || `name-${String(row.name).toLowerCase()}`),
+        String(row.name),
+        row.weight == null ? null : Number(row.weight),
+        Number(row.price),
+      ));
+      for (let index = 0; index < statements.length; index += 80) await db.batch(statements.slice(index, index + 80));
+      imported += statements.length;
+    }
+    return Response.json({ ok: true, imported, suppliers: grouped.size });
+  }
   if (body.action === "delete_product") {
     await db.prepare("DELETE FROM price_list_items WHERE id=?").bind(Number(body.id)).run();
     return Response.json({ ok: true });

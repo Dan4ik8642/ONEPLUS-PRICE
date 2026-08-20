@@ -30,9 +30,21 @@ test("admin supports suppliers, Excel import and price-tag attributes", async ()
   assert.match(source, /Новая версия цен/);
   assert.match(source, /Действует с/);
   assert.match(source, /delete_price_list/);
+  assert.match(source, /Загрузить готовых поставщиков в город/);
+  assert.match(source, /bulk_import/);
   assert.match(source, /delete_product/);
   assert.match(source, /Веган/);
   assert.match(source, /Хит/);
+});
+
+test("bulk import groups ready supplier rows without removing manual workflows", async () => {
+  const source = await readFile(fromProject("app/api/admin/route.ts"), "utf8");
+  assert.match(source, /body\.action === "bulk_import"/);
+  assert.match(source, /supplier_cities/);
+  assert.match(source, /Текущие цены/);
+  assert.match(source, /ON CONFLICT\(price_list_id,article\)/);
+  assert.match(source, /body\.action === "manual"/);
+  assert.match(source, /body\.action === "product"/);
 });
 
 test("hosting has a database binding and the schema migrations exist", async () => {
