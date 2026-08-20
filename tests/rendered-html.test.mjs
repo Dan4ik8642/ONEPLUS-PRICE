@@ -30,7 +30,7 @@ test("admin supports suppliers, Excel import and price-tag attributes", async ()
   assert.match(source, /Новая версия цен/);
   assert.match(source, /Действует с/);
   assert.match(source, /delete_price_list/);
-  assert.match(source, /Загрузить готовых поставщиков в город/);
+  assert.match(source, /Загрузить поставщиков в город/);
   assert.match(source, /bulk_import/);
   assert.match(source, /delete_product/);
   assert.match(source, /Веган/);
