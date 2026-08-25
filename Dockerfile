@@ -1,20 +1,28 @@
-FROM node:22-bookworm-slim AS build
+FROM node:24-alpine AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
+
+FROM dependencies AS build
 COPY . .
 RUN npm run build
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:24-alpine AS production-dependencies
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HOST=0.0.0.0
 ENV PORT=3000
-COPY --from=build /app/package.json /app/package-lock.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/.openai ./.openai
-COPY --from=build /app/drizzle ./drizzle
-COPY --from=build /app/scripts ./scripts
-COPY --from=build /app/data ./data
+COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/.output ./.output
+COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node scripts ./scripts
+COPY --chown=node:node server/database ./server/database
+COPY --chown=node:node data ./data
+USER node
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+CMD ["node", ".output/server/index.mjs"]

@@ -1,9 +1,14 @@
 .git
+.gitea
+.nuxt
+.output
 .next
 .vinext
 .wrangler
 dist
 node_modules
-*.tar.gz
+coverage
 .env
-npm-debug.log
+*.tar.gz
+docs
+*.md

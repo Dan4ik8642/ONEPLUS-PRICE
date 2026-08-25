@@ -1,1 +1,0 @@
-export async function POST(request:Request){const secure=new URL(request.url).hostname==="localhost"?"":"; Secure";return new Response(JSON.stringify({ok:true}),{headers:{"content-type":"application/json","set-cookie":`op_session=; Path=/; HttpOnly; SameSite=Strict${secure}; Max-Age=0`}});}

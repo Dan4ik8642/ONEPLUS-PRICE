@@ -1,0 +1,10 @@
+services:
+  app:
+    networks:
+      - traefik-public
+      - postgres
+
+networks:
+  postgres:
+    external: true
+    name: ${POSTGRES_NETWORK:-postgres-public}
