@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/.nuxt/
+/.output/
 
 # next.js
 /.next/
@@ -31,6 +33,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!.env.production
 
 # vercel
 .vercel
@@ -40,3 +43,6 @@ yarn-error.log*
 /outputs/
 /work/
 *.tar.gz
+
+# Боевые выгрузки передаются вне Git и импортируются из защищённого каталога.
+/data/production/

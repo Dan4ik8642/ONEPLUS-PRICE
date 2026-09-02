@@ -1,0 +1,12 @@
+services:
+  app:
+    environment:
+      NUXT_DATABASE_URL: ${NUXT_DATABASE_URL:?Укажите NUXT_DATABASE_URL в .env}
+    networks:
+      - traefik-public
+      - postgres-internal
+
+networks:
+  postgres-internal:
+    external: true
+    name: ${POSTGRES_NETWORK:-postgres-internal}
